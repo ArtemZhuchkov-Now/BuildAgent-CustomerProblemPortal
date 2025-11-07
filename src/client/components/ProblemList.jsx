@@ -8,8 +8,7 @@ export default function ProblemList({ problems, onSelectProblem, onSearch, probl
     category: 'all',
     priority: 'all',
     state: 'all',
-    active: 'all',
-    dateRange: 'all'
+    active: 'all'
   });
   const [showFilters, setShowFilters] = useState(false);
   const [hideDuplicates, setHideDuplicates] = useState(false);
@@ -116,17 +115,29 @@ export default function ProblemList({ problems, onSelectProblem, onSearch, probl
     // Apply filters only if not in search mode OR if no search term
     if (!isSearchMode || !searchTerm) {
       result = result.filter(problem => {
-        // Category filter - using the correct value comparison
+        // Category filter - using the correct value comparison and more thorough checking
         if (filters.category !== 'all') {
-          const problemCategory = value(problem.category); // Use value() not display()
-          if (problemCategory !== filters.category) {
+          const problemCategory = value(problem.category);
+          const problemCategoryDisplay = display(problem.category);
+          
+          // Debug logging for category filtering
+          console.log('Category filter debug:', {
+            filterValue: filters.category,
+            problemCategory,
+            problemCategoryDisplay,
+            match: problemCategory === filters.category || problemCategoryDisplay.toLowerCase() === filters.category
+          });
+          
+          // Try both value and display_value (case-insensitive for display)
+          if (problemCategory !== filters.category && 
+              problemCategoryDisplay.toLowerCase() !== filters.category) {
             return false;
           }
         }
 
         // Priority filter - using the correct value comparison
         if (filters.priority !== 'all') {
-          const problemPriority = value(problem.priority); // Use value() not display()
+          const problemPriority = value(problem.priority);
           if (problemPriority !== filters.priority) {
             return false;
           }
@@ -134,13 +145,13 @@ export default function ProblemList({ problems, onSelectProblem, onSearch, probl
 
         // State filter - using the correct value comparison
         if (filters.state !== 'all') {
-          const problemState = value(problem.state); // Use value() not display()
+          const problemState = value(problem.state);
           if (problemState !== filters.state) {
             return false;
           }
         }
 
-        // Active filter - new filter
+        // Active filter
         if (filters.active !== 'all') {
           const problemActive = value(problem.active);
           const isActive = problemActive === 'true' || problemActive === true;
@@ -149,25 +160,6 @@ export default function ProblemList({ problems, onSelectProblem, onSearch, probl
           }
           if (filters.active === 'false' && isActive) {
             return false;
-          }
-        }
-
-        // Date range filter
-        if (filters.dateRange !== 'all') {
-          const problemDate = new Date(display(problem.sys_updated_on));
-          const now = new Date();
-          const daysDiff = (now - problemDate) / (1000 * 60 * 60 * 24);
-
-          switch (filters.dateRange) {
-            case 'today':
-              if (daysDiff > 1) return false;
-              break;
-            case 'week':
-              if (daysDiff > 7) return false;
-              break;
-            case 'month':
-              if (daysDiff > 30) return false;
-              break;
           }
         }
 
@@ -201,6 +193,7 @@ export default function ProblemList({ problems, onSelectProblem, onSearch, probl
   };
 
   const handleFilterChange = (filterType, value) => {
+    console.log('Filter change:', { filterType, value });
     setFilters(prev => ({
       ...prev,
       [filterType]: value
@@ -217,8 +210,7 @@ export default function ProblemList({ problems, onSelectProblem, onSearch, probl
       category: 'all',
       priority: 'all',
       state: 'all',
-      active: 'all',
-      dateRange: 'all'
+      active: 'all'
     });
     setSearchTerm('');
     setIsSearchMode(false);
@@ -436,7 +428,7 @@ export default function ProblemList({ problems, onSelectProblem, onSearch, probl
                   </select>
                 </div>
 
-                {/* Active Filter - New filter */}
+                {/* Active Filter */}
                 <div className="filter-group">
                   <label htmlFor="active-filter">🔄 Status</label>
                   <select 
@@ -448,22 +440,6 @@ export default function ProblemList({ problems, onSelectProblem, onSearch, probl
                     <option value="all">All Status</option>
                     <option value="true">Active Only</option>
                     <option value="false">Inactive Only</option>
-                  </select>
-                </div>
-
-                {/* Date Range Filter */}
-                <div className="filter-group">
-                  <label htmlFor="date-filter">📅 Updated</label>
-                  <select 
-                    id="date-filter"
-                    value={filters.dateRange}
-                    onChange={(e) => handleFilterChange('dateRange', e.target.value)}
-                    className="filter-select"
-                  >
-                    <option value="all">Any Time</option>
-                    <option value="today">Today</option>
-                    <option value="week">This Week</option>
-                    <option value="month">This Month</option>
                   </select>
                 </div>
               </div>

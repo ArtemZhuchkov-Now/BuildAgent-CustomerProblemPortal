@@ -106,29 +106,6 @@ export class ProblemService {
         query += (query ? '^' : '') + `active=${filters.activeOnly}`;
       }
       
-      // Add date range filter
-      if (filters.dateRange && filters.dateRange !== 'all') {
-        const now = new Date();
-        let startDate;
-        
-        switch (filters.dateRange) {
-          case 'today':
-            startDate = new Date(now.setHours(0, 0, 0, 0));
-            break;
-          case 'week':
-            startDate = new Date(now.setDate(now.getDate() - 7));
-            break;
-          case 'month':
-            startDate = new Date(now.setDate(now.getDate() - 30));
-            break;
-        }
-        
-        if (startDate) {
-          const dateStr = startDate.toISOString().split('T')[0];
-          query += (query ? '^' : '') + `sys_updated_on>=${dateStr}`;
-        }
-      }
-      
       // Always order by most recent first
       query += (query ? '^' : '') + 'ORDERBYDESCsys_updated_on';
       
@@ -177,6 +154,7 @@ export class ProblemService {
         },
         priority: { display_value: randomPriority, value: randomPriority },
         state: { display_value: randomState, value: randomState },
+        // Make sure both value and display_value are consistently lowercase for categories
         category: { display_value: randomCategory, value: randomCategory },
         active: { display_value: randomActive.toString(), value: randomActive.toString() },
         sys_updated_on: { display_value: updatedDate.toISOString(), value: updatedDate.toISOString() },
