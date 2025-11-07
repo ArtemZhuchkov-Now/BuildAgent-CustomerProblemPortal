@@ -10,16 +10,18 @@ export default function App() {
   const [selectedProblem, setSelectedProblem] = useState(null);
   const [currentView, setCurrentView] = useState('list');
   const [searchActive, setSearchActive] = useState(false);
+  const [stats, setStats] = useState(null);
 
   useEffect(() => {
     loadProblems();
+    loadStats();
   }, [service]);
 
-  const loadProblems = async () => {
+  const loadProblems = async (filters = {}) => {
     setLoading(true);
     setSearchActive(false);
     try {
-      const problemData = await service.getKnownProblems();
+      const problemData = await service.getKnownProblems(filters);
       setProblems(problemData);
     } catch (error) {
       console.error('Failed to load problems:', error);
@@ -28,11 +30,20 @@ export default function App() {
     }
   };
 
-  const handleSearch = async (searchTerm) => {
+  const loadStats = async () => {
+    try {
+      const statsData = await service.getProblemStats();
+      setStats(statsData);
+    } catch (error) {
+      console.error('Failed to load stats:', error);
+    }
+  };
+
+  const handleSearch = async (searchTerm, filters = {}) => {
     setLoading(true);
     setSearchActive(true);
     try {
-      const searchResults = await service.searchProblems(searchTerm);
+      const searchResults = await service.searchProblems(searchTerm, filters);
       setProblems(searchResults);
     } catch (error) {
       console.error('Search failed:', error);
@@ -79,16 +90,58 @@ export default function App() {
         }}>
           Stay informed about known issues, find community solutions, and share your workarounds
         </p>
-        {currentView === 'list' && (
-          <div style={{ marginTop: '20px' }}>
-            <span style={{ 
+        {currentView === 'list' && stats && (
+          <div style={{ 
+            marginTop: '20px', 
+            display: 'flex', 
+            gap: '20px', 
+            flexWrap: 'wrap',
+            alignItems: 'center'
+          }}>
+            <div style={{ 
               background: 'rgba(255,255,255,0.2)', 
               padding: '8px 16px', 
               borderRadius: '20px',
-              fontSize: '14px'
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
             }}>
-              📊 {problems.length} active problems tracked
-            </span>
+              📊 <strong>{stats.total}</strong> active problems tracked
+            </div>
+            <div style={{ 
+              background: 'rgba(255,255,255,0.2)', 
+              padding: '8px 16px', 
+              borderRadius: '20px',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}>
+              🔴 <strong>{stats.byPriority['1'] || 0}</strong> critical
+            </div>
+            <div style={{ 
+              background: 'rgba(255,255,255,0.2)', 
+              padding: '8px 16px', 
+              borderRadius: '20px',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}>
+              ⚙️ <strong>{stats.byState['2'] || 0}</strong> in progress
+            </div>
+            <div style={{ 
+              background: 'rgba(255,255,255,0.2)', 
+              padding: '8px 16px', 
+              borderRadius: '20px',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}>
+              ✅ <strong>{stats.byState['4'] || 0}</strong> resolved today
+            </div>
           </div>
         )}
       </div>
@@ -110,6 +163,21 @@ export default function App() {
         <p style={{ margin: '0', opacity: '0.7', fontSize: '14px' }}>
           Community-driven solutions • Proactive notifications • Real-time updates
         </p>
+        {stats && (
+          <div style={{ 
+            marginTop: '20px', 
+            display: 'flex', 
+            justifyContent: 'center', 
+            gap: '30px', 
+            flexWrap: 'wrap',
+            fontSize: '14px',
+            opacity: '0.8'
+          }}>
+            <span>📈 {stats.total} Problems Tracked</span>
+            <span>🎯 {Object.keys(stats.byCategory).length} Categories</span>
+            <span>⭐ Community Powered</span>
+          </div>
+        )}
       </div>
     </footer>
   );
@@ -128,7 +196,8 @@ export default function App() {
           }}>
             <div style={{ 
               fontSize: '48px', 
-              marginBottom: '20px' 
+              marginBottom: '20px',
+              animation: 'spin 2s linear infinite'
             }}>🔄</div>
             <div style={{ 
               fontSize: '20px', 
@@ -146,6 +215,12 @@ export default function App() {
           </div>
         </main>
         {renderFooter()}
+        <style>{`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
       </div>
     );
   }
@@ -159,28 +234,40 @@ export default function App() {
           <div>
             {searchActive && (
               <div style={{ 
-                background: '#e3f2fd', 
+                background: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)', 
                 padding: '15px 20px', 
                 borderRadius: '8px',
                 margin: '20px 0',
-                border: '1px solid #2196f3'
+                border: '1px solid #2196f3',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
               }}>
-                <span style={{ color: '#1976d2', fontWeight: 'bold' }}>
-                  🔍 Search Results
+                <span style={{ color: '#1976d2', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  🔍 <strong>Search Results</strong> - Found {problems.length} matching problems
                 </span>
                 <button 
                   onClick={loadProblems}
                   style={{
-                    float: 'right',
-                    background: 'transparent',
+                    background: 'white',
                     border: '1px solid #1976d2',
                     color: '#1976d2',
-                    padding: '5px 15px',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: '600',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.background = '#1976d2';
+                    e.target.style.color = 'white';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.background = 'white';
+                    e.target.style.color = '#1976d2';
                   }}
                 >
-                  Show All Problems
+                  📋 Show All Problems
                 </button>
               </div>
             )}
