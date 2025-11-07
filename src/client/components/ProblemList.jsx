@@ -11,6 +11,8 @@ export default function ProblemList({ problems, onSelectProblem, onSearch }) {
     dateRange: 'all'
   });
   const [showFilters, setShowFilters] = useState(false);
+  const [hideDuplicates, setHideDuplicates] = useState(false);
+  const [isSearchMode, setIsSearchMode] = useState(false);
 
   // Extract unique values for filter options
   const filterOptions = useMemo(() => {
@@ -39,72 +41,112 @@ export default function ProblemList({ problems, onSelectProblem, onSearch }) {
     };
   }, [problems]);
 
+  // Remove duplicates based on short_description
+  const deduplicatedProblems = useMemo(() => {
+    if (!hideDuplicates) return problems;
+    
+    const seen = new Set();
+    const uniqueProblems = [];
+    
+    problems.forEach(problem => {
+      const title = display(problem.short_description).toLowerCase().trim();
+      if (!seen.has(title)) {
+        seen.add(title);
+        uniqueProblems.push(problem);
+      }
+    });
+    
+    return uniqueProblems;
+  }, [problems, hideDuplicates]);
+
   // Filter problems based on current filters and search
   const filteredProblems = useMemo(() => {
-    return problems.filter(problem => {
-      // Text search
-      if (searchTerm) {
-        const searchLower = searchTerm.toLowerCase();
+    let result = deduplicatedProblems;
+
+    // Apply text search only if in search mode
+    if (isSearchMode && searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      result = result.filter(problem => {
         const titleMatch = display(problem.short_description).toLowerCase().includes(searchLower);
         const descMatch = display(problem.description).toLowerCase().includes(searchLower);
         const numberMatch = display(problem.number).toLowerCase().includes(searchLower);
         
-        if (!titleMatch && !descMatch && !numberMatch) {
-          return false;
+        return titleMatch || descMatch || numberMatch;
+      });
+    }
+
+    // Apply filters only if not in search mode OR if no search term
+    if (!isSearchMode || !searchTerm) {
+      result = result.filter(problem => {
+        // Category filter
+        if (filters.category !== 'all') {
+          const problemCategory = display(problem.category) || 'General';
+          if (problemCategory !== filters.category) {
+            return false;
+          }
         }
-      }
 
-      // Category filter
-      if (filters.category !== 'all') {
-        const problemCategory = display(problem.category) || 'General';
-        if (problemCategory !== filters.category) {
-          return false;
+        // Severity filter
+        if (filters.severity !== 'all') {
+          const problemPriority = display(problem.priority);
+          if (problemPriority !== filters.severity) {
+            return false;
+          }
         }
-      }
 
-      // Severity filter
-      if (filters.severity !== 'all') {
-        if (display(problem.priority) !== filters.severity) {
-          return false;
+        // Status filter
+        if (filters.status !== 'all') {
+          const problemState = display(problem.state);
+          if (problemState !== filters.status) {
+            return false;
+          }
         }
-      }
 
-      // Status filter
-      if (filters.status !== 'all') {
-        if (display(problem.state) !== filters.status) {
-          return false;
+        // Date range filter
+        if (filters.dateRange !== 'all') {
+          const problemDate = new Date(display(problem.sys_updated_on));
+          const now = new Date();
+          const daysDiff = (now - problemDate) / (1000 * 60 * 60 * 24);
+
+          switch (filters.dateRange) {
+            case 'today':
+              if (daysDiff > 1) return false;
+              break;
+            case 'week':
+              if (daysDiff > 7) return false;
+              break;
+            case 'month':
+              if (daysDiff > 30) return false;
+              break;
+          }
         }
-      }
 
-      // Date range filter
-      if (filters.dateRange !== 'all') {
-        const problemDate = new Date(display(problem.sys_updated_on));
-        const now = new Date();
-        const daysDiff = (now - problemDate) / (1000 * 60 * 60 * 24);
+        return true;
+      });
+    }
 
-        switch (filters.dateRange) {
-          case 'today':
-            if (daysDiff > 1) return false;
-            break;
-          case 'week':
-            if (daysDiff > 7) return false;
-            break;
-          case 'month':
-            if (daysDiff > 30) return false;
-            break;
-        }
-      }
-
-      return true;
-    });
-  }, [problems, searchTerm, filters]);
+    return result;
+  }, [deduplicatedProblems, searchTerm, filters, isSearchMode]);
 
   const handleSearch = (e) => {
     e.preventDefault();
     const term = e.target.search.value.trim();
     setSearchTerm(term);
+    setIsSearchMode(!!term);
+    
     if (term && onSearch) {
       onSearch(term);
+    }
+  };
+
+  const handleSearchInputChange = (e) => {
+    const term = e.target.value;
+    setSearchTerm(term);
+    setIsSearchMode(!!term);
+    
+    // Clear search mode if term is empty
+    if (!term) {
+      setIsSearchMode(false);
     }
   };
 
@@ -113,6 +155,11 @@ export default function ProblemList({ problems, onSelectProblem, onSearch }) {
       ...prev,
       [filterType]: value
     }));
+    // Clear search mode when using filters
+    if (value !== 'all') {
+      setIsSearchMode(false);
+      setSearchTerm('');
+    }
   };
 
   const clearFilters = () => {
@@ -123,6 +170,11 @@ export default function ProblemList({ problems, onSelectProblem, onSearch }) {
       dateRange: 'all'
     });
     setSearchTerm('');
+    setIsSearchMode(false);
+  };
+
+  const toggleDuplicates = () => {
+    setHideDuplicates(!hideDuplicates);
   };
 
   const getPriorityBadge = (priority) => {
@@ -159,7 +211,15 @@ export default function ProblemList({ problems, onSelectProblem, onSearch }) {
   };
 
   const getActiveFiltersCount = () => {
-    return Object.values(filters).filter(value => value !== 'all').length + (searchTerm ? 1 : 0);
+    const filterCount = Object.values(filters).filter(value => value !== 'all').length;
+    const searchCount = isSearchMode && searchTerm ? 1 : 0;
+    return filterCount + searchCount;
+  };
+
+  const getDuplicateCount = () => {
+    const totalProblems = problems.length;
+    const uniqueProblems = deduplicatedProblems.length;
+    return totalProblems - uniqueProblems;
   };
 
   return (
@@ -174,13 +234,16 @@ export default function ProblemList({ problems, onSelectProblem, onSearch }) {
               placeholder="🔍 Search problems by title, description, or number..." 
               className="search-input"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={handleSearchInputChange}
             />
             {searchTerm && (
               <button 
                 type="button" 
                 className="clear-search" 
-                onClick={() => setSearchTerm('')}
+                onClick={() => {
+                  setSearchTerm('');
+                  setIsSearchMode(false);
+                }}
                 aria-label="Clear search"
               >
                 ✕
@@ -198,87 +261,126 @@ export default function ProblemList({ problems, onSelectProblem, onSearch }) {
           </button>
         </form>
 
+        {/* Duplicate Toggle */}
+        <div className="duplicate-toggle-section">
+          <label className="duplicate-toggle">
+            <input 
+              type="checkbox" 
+              checked={hideDuplicates}
+              onChange={toggleDuplicates}
+            />
+            <span className="toggle-slider"></span>
+            <span className="toggle-label">
+              🔗 Hide Duplicate Problems
+              {getDuplicateCount() > 0 && (
+                <span className="duplicate-count"> ({getDuplicateCount()} duplicates found)</span>
+              )}
+            </span>
+          </label>
+        </div>
+
         {/* Faceted Filters */}
         {showFilters && (
           <div className="filters-panel">
             <div className="filters-header">
               <h3>Filter Problems</h3>
-              {getActiveFiltersCount() > 0 && (
-                <button className="clear-filters" onClick={clearFilters}>
-                  Clear All Filters
-                </button>
-              )}
+              <div className="filter-actions">
+                {isSearchMode && (
+                  <button 
+                    className="exit-search-mode" 
+                    onClick={() => {
+                      setIsSearchMode(false);
+                      setSearchTerm('');
+                    }}
+                  >
+                    Exit Search Mode
+                  </button>
+                )}
+                {getActiveFiltersCount() > 0 && (
+                  <button className="clear-filters" onClick={clearFilters}>
+                    Clear All Filters
+                  </button>
+                )}
+              </div>
             </div>
             
-            <div className="filters-grid">
-              {/* Category Filter */}
-              <div className="filter-group">
-                <label htmlFor="category-filter">📂 Category</label>
-                <select 
-                  id="category-filter"
-                  value={filters.category}
-                  onChange={(e) => handleFilterChange('category', e.target.value)}
-                  className="filter-select"
-                >
-                  <option value="all">All Categories</option>
-                  {filterOptions.categories.map(category => (
-                    <option key={category} value={category}>{category}</option>
-                  ))}
-                </select>
-              </div>
+            {!isSearchMode && (
+              <div className="filters-grid">
+                {/* Category Filter */}
+                <div className="filter-group">
+                  <label htmlFor="category-filter">📂 Category</label>
+                  <select 
+                    id="category-filter"
+                    value={filters.category}
+                    onChange={(e) => handleFilterChange('category', e.target.value)}
+                    className="filter-select"
+                  >
+                    <option value="all">All Categories</option>
+                    {filterOptions.categories.map(category => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
+                  </select>
+                </div>
 
-              {/* Severity Filter */}
-              <div className="filter-group">
-                <label htmlFor="severity-filter">⚡ Priority</label>
-                <select 
-                  id="severity-filter"
-                  value={filters.severity}
-                  onChange={(e) => handleFilterChange('severity', e.target.value)}
-                  className="filter-select"
-                >
-                  <option value="all">All Priorities</option>
-                  <option value="1">Critical</option>
-                  <option value="2">High</option>
-                  <option value="3">Moderate</option>
-                  <option value="4">Low</option>
-                  <option value="5">Planning</option>
-                </select>
-              </div>
+                {/* Severity Filter */}
+                <div className="filter-group">
+                  <label htmlFor="severity-filter">⚡ Priority</label>
+                  <select 
+                    id="severity-filter"
+                    value={filters.severity}
+                    onChange={(e) => handleFilterChange('severity', e.target.value)}
+                    className="filter-select"
+                  >
+                    <option value="all">All Priorities</option>
+                    <option value="1">Critical</option>
+                    <option value="2">High</option>
+                    <option value="3">Moderate</option>
+                    <option value="4">Low</option>
+                    <option value="5">Planning</option>
+                  </select>
+                </div>
 
-              {/* Status Filter */}
-              <div className="filter-group">
-                <label htmlFor="status-filter">📊 Status</label>
-                <select 
-                  id="status-filter"
-                  value={filters.status}
-                  onChange={(e) => handleFilterChange('status', e.target.value)}
-                  className="filter-select"
-                >
-                  <option value="all">All Statuses</option>
-                  <option value="1">New</option>
-                  <option value="2">In Progress</option>
-                  <option value="3">Analysis</option>
-                  <option value="4">Resolved</option>
-                  <option value="5">Closed</option>
-                </select>
-              </div>
+                {/* Status Filter */}
+                <div className="filter-group">
+                  <label htmlFor="status-filter">📊 Status</label>
+                  <select 
+                    id="status-filter"
+                    value={filters.status}
+                    onChange={(e) => handleFilterChange('status', e.target.value)}
+                    className="filter-select"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="1">New</option>
+                    <option value="2">In Progress</option>
+                    <option value="3">Analysis</option>
+                    <option value="4">Resolved</option>
+                    <option value="5">Closed</option>
+                  </select>
+                </div>
 
-              {/* Date Range Filter */}
-              <div className="filter-group">
-                <label htmlFor="date-filter">📅 Updated</label>
-                <select 
-                  id="date-filter"
-                  value={filters.dateRange}
-                  onChange={(e) => handleFilterChange('dateRange', e.target.value)}
-                  className="filter-select"
-                >
-                  <option value="all">Any Time</option>
-                  <option value="today">Today</option>
-                  <option value="week">This Week</option>
-                  <option value="month">This Month</option>
-                </select>
+                {/* Date Range Filter */}
+                <div className="filter-group">
+                  <label htmlFor="date-filter">📅 Updated</label>
+                  <select 
+                    id="date-filter"
+                    value={filters.dateRange}
+                    onChange={(e) => handleFilterChange('dateRange', e.target.value)}
+                    className="filter-select"
+                  >
+                    <option value="all">Any Time</option>
+                    <option value="today">Today</option>
+                    <option value="week">This Week</option>
+                    <option value="month">This Month</option>
+                  </select>
+                </div>
               </div>
-            </div>
+            )}
+            
+            {isSearchMode && (
+              <div className="search-mode-info">
+                <p>🔍 <strong>Search Mode Active</strong> - Filters are disabled while searching. Clear search to use filters.</p>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -289,9 +391,19 @@ export default function ProblemList({ problems, onSelectProblem, onSearch }) {
           <span className="results-count">
             📋 Showing <strong>{filteredProblems.length}</strong> of <strong>{problems.length}</strong> problems
           </span>
+          {hideDuplicates && getDuplicateCount() > 0 && (
+            <span className="duplicate-info">
+              • {getDuplicateCount()} duplicate{getDuplicateCount() > 1 ? 's' : ''} hidden
+            </span>
+          )}
           {getActiveFiltersCount() > 0 && (
             <span className="active-filters">
               • {getActiveFiltersCount()} filter{getActiveFiltersCount() > 1 ? 's' : ''} active
+            </span>
+          )}
+          {isSearchMode && (
+            <span className="search-mode-indicator">
+              • Search mode
             </span>
           )}
         </div>
