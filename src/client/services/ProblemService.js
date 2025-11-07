@@ -4,12 +4,76 @@ export class ProblemService {
       "Accept": "application/json",
       "X-UserToken": window.g_ck
     };
+    // Cache for choice values to avoid repeated API calls
+    this._choiceCache = {};
+  }
+
+  // New method to fetch choice lists from ServiceNow
+  async getChoiceValues(table, field) {
+    const cacheKey = `${table}_${field}`;
+    if (this._choiceCache[cacheKey]) {
+      return this._choiceCache[cacheKey];
+    }
+
+    try {
+      const response = await fetch(`/api/now/table/sys_choice?sysparm_query=name=${table}^element=${field}^inactive=false&sysparm_fields=value,label&sysparm_display_value=true&sysparm_order_by=sequence`, {
+        headers: this.baseHeaders
+      });
+      
+      if (!response.ok) throw new Error('Failed to fetch choice values');
+      const data = await response.json();
+      
+      // Transform to usable format
+      const choices = data.result.map(choice => ({
+        value: choice.value,
+        label: choice.label
+      }));
+      
+      this._choiceCache[cacheKey] = choices;
+      return choices;
+    } catch (error) {
+      console.error(`Error fetching choices for ${table}.${field}:`, error);
+      // Return fallback choices based on actual schema
+      return this._getFallbackChoices(table, field);
+    }
+  }
+
+  _getFallbackChoices(table, field) {
+    if (table === 'problem') {
+      switch (field) {
+        case 'category':
+          return [
+            { value: 'software', label: 'Software' },
+            { value: 'hardware', label: 'Hardware' },
+            { value: 'network', label: 'Network' },
+            { value: 'database', label: 'Database' }
+          ];
+        case 'priority':
+          return [
+            { value: '1', label: 'Critical' },
+            { value: '2', label: 'High' },
+            { value: '3', label: 'Moderate' },
+            { value: '4', label: 'Low' },
+            { value: '5', label: 'Planning' }
+          ];
+        case 'state':
+          return [
+            { value: '101', label: 'New' },
+            { value: '102', label: 'Assess' },
+            { value: '103', label: 'Root Cause Analysis' },
+            { value: '104', label: 'Fix in Progress' },
+            { value: '106', label: 'Resolved' },
+            { value: '107', label: 'Closed' }
+          ];
+      }
+    }
+    return [];
   }
 
   async getKnownProblems(filters = {}) {
     try {
       // Build query based on filters
-      let query = 'state!=6'; // Exclude cancelled problems by default
+      let query = 'active=true'; // Only get active problems
       
       // Add category filter
       if (filters.category && filters.category !== 'all') {
@@ -61,16 +125,16 @@ export class ProblemService {
       return data.result || [];
     } catch (error) {
       console.error('Error fetching problems:', error);
-      // Return mock data for development/demo purposes
+      // Return mock data for development/demo purposes with correct choice values
       return this._getMockProblems();
     }
   }
 
   _getMockProblems() {
-    // Mock data for development when no ServiceNow instance is available
-    const categories = ['Hardware', 'Software', 'Network', 'Security', 'Database', 'General'];
+    // Mock data with actual ServiceNow problem table choice values
+    const categories = ['software', 'hardware', 'network', 'database'];
     const priorities = ['1', '2', '3', '4', '5'];
-    const states = ['1', '2', '3', '4', '5'];
+    const states = ['101', '102', '103', '104', '106', '107'];
     
     const problems = [];
     
@@ -86,8 +150,8 @@ export class ProblemService {
         sys_id: { display_value: `problem_${i}`, value: `problem_${i}` },
         number: { display_value: `PRB00${1000 + i}`, value: `PRB00${1000 + i}` },
         short_description: { 
-          display_value: `${randomCategory} Issue ${i}: ${this._getRandomProblemTitle()}`, 
-          value: `${randomCategory} Issue ${i}: ${this._getRandomProblemTitle()}` 
+          display_value: `${randomCategory.charAt(0).toUpperCase() + randomCategory.slice(1)} Issue ${i}: ${this._getRandomProblemTitle()}`, 
+          value: `${randomCategory.charAt(0).toUpperCase() + randomCategory.slice(1)} Issue ${i}: ${this._getRandomProblemTitle()}` 
         },
         description: { 
           display_value: this._getRandomDescription(), 
@@ -256,10 +320,10 @@ export class ProblemService {
       // Build search query
       let query = `short_descriptionLIKE${searchTerm}^ORdescriptionLIKE${searchTerm}^ORnumberLIKE${searchTerm}`;
       
-      // Add base filter (exclude cancelled)
-      query += '^state!=6';
+      // Add base filter (active problems)
+      query += '^active=true';
       
-      // Add additional filters
+      // Add additional filters with correct values
       if (filters.category && filters.category !== 'all') {
         query += `^category=${filters.category}`;
       }
@@ -361,34 +425,24 @@ export class ProblemService {
     };
   }
 
+  // Updated method to fetch real categories from choice lists
   async getProblemCategories() {
-    try {
-      // Get unique categories from problems
-      const response = await fetch('/api/now/table/problem?sysparm_query=state!=6^ORDERBYcategory&sysparm_fields=category&sysparm_display_value=true&sysparm_exclude_reference_link=true', {
-        headers: this.baseHeaders
-      });
-      
-      if (!response.ok) throw new Error('Failed to fetch categories');
-      const data = await response.json();
-      
-      const categories = [...new Set(
-        data.result
-          .map(item => item.category)
-          .filter(cat => cat && cat.trim() !== '')
-      )].sort();
-      
-      return categories;
-    } catch (error) {
-      console.error('Error fetching categories:', error);
-      // Return mock categories
-      return ['Hardware', 'Software', 'Network', 'Security', 'Database', 'General'];
-    }
+    return await this.getChoiceValues('problem', 'category');
+  }
+
+  // New methods to get other choice values
+  async getProblemPriorities() {
+    return await this.getChoiceValues('problem', 'priority');
+  }
+
+  async getProblemStates() {
+    return await this.getChoiceValues('problem', 'state');
   }
 
   async getProblemStats() {
     try {
-      // Get statistics for dashboard
-      const response = await fetch('/api/now/table/problem?sysparm_query=state!=6&sysparm_fields=state,priority,category&sysparm_display_value=true&sysparm_exclude_reference_link=true', {
+      // Get statistics for dashboard with correct field filtering
+      const response = await fetch('/api/now/table/problem?sysparm_query=active=true&sysparm_fields=state,priority,category&sysparm_display_value=true&sysparm_exclude_reference_link=true', {
         headers: this.baseHeaders
       });
       
@@ -413,19 +467,19 @@ export class ProblemService {
         stats.byState[state] = (stats.byState[state] || 0) + 1;
         
         // Count by category
-        const category = problem.category || 'General';
+        const category = problem.category || 'Unknown';
         stats.byCategory[category] = (stats.byCategory[category] || 0) + 1;
       });
       
       return stats;
     } catch (error) {
       console.error('Error fetching stats:', error);
-      // Return mock stats
+      // Return mock stats with correct categories
       return {
         total: 25,
-        byPriority: { '1': 3, '2': 7, '3': 10, '4': 5 },
-        byState: { '1': 5, '2': 8, '3': 7, '4': 3, '5': 2 },
-        byCategory: { 'Hardware': 5, 'Software': 8, 'Network': 4, 'Security': 3, 'Database': 3, 'General': 2 }
+        byPriority: { '1': 3, '2': 7, '3': 10, '4': 4, '5': 1 },
+        byState: { '101': 5, '102': 8, '103': 7, '104': 3, '106': 2 },
+        byCategory: { 'software': 8, 'hardware': 5, 'network': 7, 'database': 5 }
       };
     }
   }

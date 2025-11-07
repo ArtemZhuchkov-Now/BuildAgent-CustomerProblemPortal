@@ -463,14 +463,14 @@
   box-shadow: 0 2px 4px rgba(33, 150, 243, 0.3);
 }
 
-/* State Badge Colors */
+/* State Badge Colors - Updated for actual ServiceNow problem states */
 .state-new {
   background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
   color: #1976d2;
   border: 1px solid #90caf9;
 }
 
-.state-progress {
+.state-assess {
   background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
   color: #f57c00;
   border: 1px solid #ffcc02;
@@ -480,6 +480,12 @@
   background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
   color: #7b1fa2;
   border: 1px solid #ce93d8;
+}
+
+.state-progress {
+  background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+  color: #ff8f00;
+  border: 1px solid #ffd54f;
 }
 
 .state-resolved {

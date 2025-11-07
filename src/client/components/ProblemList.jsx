@@ -2,44 +2,79 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { display, value } from '../utils/fields.js';
 import './ProblemList.css';
 
-export default function ProblemList({ problems, onSelectProblem, onSearch }) {
+export default function ProblemList({ problems, onSelectProblem, onSearch, problemService }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
     category: 'all',
-    severity: 'all',
-    status: 'all',
+    priority: 'all',
+    state: 'all',
     dateRange: 'all'
   });
   const [showFilters, setShowFilters] = useState(false);
   const [hideDuplicates, setHideDuplicates] = useState(false);
   const [isSearchMode, setIsSearchMode] = useState(false);
+  
+  // Choice lists from ServiceNow
+  const [choiceLists, setChoiceLists] = useState({
+    categories: [],
+    priorities: [],
+    states: []
+  });
 
-  // Extract unique values for filter options
-  const filterOptions = useMemo(() => {
-    const categories = new Set();
-    const severities = new Set();
-    const statuses = new Set();
-
-    problems.forEach(problem => {
-      // Get category from category field or derive from short_description
-      const category = display(problem.category) || 'General';
-      categories.add(category);
-      
-      // Get severity/priority
-      const severity = display(problem.priority);
-      if (severity) severities.add(severity);
-      
-      // Get status
-      const status = display(problem.state);
-      if (status) statuses.add(status);
-    });
-
-    return {
-      categories: Array.from(categories).sort(),
-      severities: Array.from(severities).sort(),
-      statuses: Array.from(statuses).sort()
+  // Fetch choice lists on component mount
+  useEffect(() => {
+    const fetchChoiceLists = async () => {
+      if (problemService) {
+        try {
+          const [categories, priorities, states] = await Promise.all([
+            problemService.getProblemCategories(),
+            problemService.getProblemPriorities(),
+            problemService.getProblemStates()
+          ]);
+          
+          setChoiceLists({
+            categories: categories || [],
+            priorities: priorities || [],
+            states: states || []
+          });
+        } catch (error) {
+          console.error('Error fetching choice lists:', error);
+          // Set fallback choice lists based on actual ServiceNow schema
+          setChoiceLists({
+            categories: [
+              { value: 'software', label: 'Software' },
+              { value: 'hardware', label: 'Hardware' },
+              { value: 'network', label: 'Network' },
+              { value: 'database', label: 'Database' }
+            ],
+            priorities: [
+              { value: '1', label: 'Critical' },
+              { value: '2', label: 'High' },
+              { value: '3', label: 'Moderate' },
+              { value: '4', label: 'Low' },
+              { value: '5', label: 'Planning' }
+            ],
+            states: [
+              { value: '101', label: 'New' },
+              { value: '102', label: 'Assess' },
+              { value: '103', label: 'Root Cause Analysis' },
+              { value: '104', label: 'Fix in Progress' },
+              { value: '106', label: 'Resolved' },
+              { value: '107', label: 'Closed' }
+            ]
+          });
+        }
+      }
     };
-  }, [problems]);
+
+    fetchChoiceLists();
+  }, [problemService]);
+
+  // Helper function to get choice label from value
+  const getChoiceLabel = (choiceList, choiceValue) => {
+    const choice = choiceList.find(c => c.value === choiceValue);
+    return choice ? choice.label : choiceValue;
+  };
 
   // Remove duplicates based on short_description
   const deduplicatedProblems = useMemo(() => {
@@ -78,26 +113,26 @@ export default function ProblemList({ problems, onSelectProblem, onSearch }) {
     // Apply filters only if not in search mode OR if no search term
     if (!isSearchMode || !searchTerm) {
       result = result.filter(problem => {
-        // Category filter
+        // Category filter - using the correct value comparison
         if (filters.category !== 'all') {
-          const problemCategory = display(problem.category) || 'General';
+          const problemCategory = value(problem.category); // Use value() not display()
           if (problemCategory !== filters.category) {
             return false;
           }
         }
 
-        // Severity filter
-        if (filters.severity !== 'all') {
-          const problemPriority = display(problem.priority);
-          if (problemPriority !== filters.severity) {
+        // Priority filter - using the correct value comparison
+        if (filters.priority !== 'all') {
+          const problemPriority = value(problem.priority); // Use value() not display()
+          if (problemPriority !== filters.priority) {
             return false;
           }
         }
 
-        // Status filter
-        if (filters.status !== 'all') {
-          const problemState = display(problem.state);
-          if (problemState !== filters.status) {
+        // State filter - using the correct value comparison
+        if (filters.state !== 'all') {
+          const problemState = value(problem.state); // Use value() not display()
+          if (problemState !== filters.state) {
             return false;
           }
         }
@@ -165,8 +200,8 @@ export default function ProblemList({ problems, onSelectProblem, onSearch }) {
   const clearFilters = () => {
     setFilters({
       category: 'all',
-      severity: 'all',
-      status: 'all',
+      priority: 'all',
+      state: 'all',
       dateRange: 'all'
     });
     setSearchTerm('');
@@ -178,12 +213,12 @@ export default function ProblemList({ problems, onSelectProblem, onSearch }) {
   };
 
   const getPriorityBadge = (priority) => {
-    const priorityNum = display(priority);
-    if (!priorityNum || priorityNum === '') {
+    const priorityValue = value(priority);
+    if (!priorityValue || priorityValue === '') {
       return null; // Don't show unknown badges
     }
     
-    switch (priorityNum) {
+    switch (priorityValue) {
       case '1': return { class: 'priority-critical', text: 'Critical', icon: '🔴' };
       case '2': return { class: 'priority-high', text: 'High', icon: '🟠' };
       case '3': return { class: 'priority-moderate', text: 'Moderate', icon: '🟡' };
@@ -194,18 +229,19 @@ export default function ProblemList({ problems, onSelectProblem, onSearch }) {
   };
 
   const getStateBadge = (state) => {
-    const stateNum = display(state);
-    if (!stateNum || stateNum === '') {
+    const stateValue = value(state);
+    if (!stateValue || stateValue === '') {
       return null; // Don't show unknown badges
     }
 
-    switch (stateNum) {
-      case '1': return { class: 'state-new', text: 'New', icon: '🆕' };
-      case '2': return { class: 'state-progress', text: 'In Progress', icon: '⚙️' };
-      case '3': return { class: 'state-analysis', text: 'Analysis', icon: '🔍' };
-      case '4': return { class: 'state-resolved', text: 'Resolved', icon: '✅' };
-      case '5': return { class: 'state-closed', text: 'Closed', icon: '📁' };
-      case '6': return { class: 'state-cancelled', text: 'Cancelled', icon: '❌' };
+    // Use the actual ServiceNow problem state values
+    switch (stateValue) {
+      case '101': return { class: 'state-new', text: 'New', icon: '🆕' };
+      case '102': return { class: 'state-assess', text: 'Assess', icon: '🔍' };
+      case '103': return { class: 'state-analysis', text: 'Root Cause Analysis', icon: '🔬' };
+      case '104': return { class: 'state-progress', text: 'Fix in Progress', icon: '⚙️' };
+      case '106': return { class: 'state-resolved', text: 'Resolved', icon: '✅' };
+      case '107': return { class: 'state-closed', text: 'Closed', icon: '📁' };
       default: return null;
     }
   };
@@ -306,7 +342,7 @@ export default function ProblemList({ problems, onSelectProblem, onSearch }) {
             
             {!isSearchMode && (
               <div className="filters-grid">
-                {/* Category Filter */}
+                {/* Category Filter - Using real ServiceNow choice values */}
                 <div className="filter-group">
                   <label htmlFor="category-filter">📂 Category</label>
                   <select 
@@ -316,45 +352,47 @@ export default function ProblemList({ problems, onSelectProblem, onSearch }) {
                     className="filter-select"
                   >
                     <option value="all">All Categories</option>
-                    {filterOptions.categories.map(category => (
-                      <option key={category} value={category}>{category}</option>
+                    {choiceLists.categories.map(category => (
+                      <option key={category.value} value={category.value}>
+                        {category.label}
+                      </option>
                     ))}
                   </select>
                 </div>
 
-                {/* Severity Filter */}
+                {/* Priority Filter - Using real ServiceNow choice values */}
                 <div className="filter-group">
-                  <label htmlFor="severity-filter">⚡ Priority</label>
+                  <label htmlFor="priority-filter">⚡ Priority</label>
                   <select 
-                    id="severity-filter"
-                    value={filters.severity}
-                    onChange={(e) => handleFilterChange('severity', e.target.value)}
+                    id="priority-filter"
+                    value={filters.priority}
+                    onChange={(e) => handleFilterChange('priority', e.target.value)}
                     className="filter-select"
                   >
                     <option value="all">All Priorities</option>
-                    <option value="1">Critical</option>
-                    <option value="2">High</option>
-                    <option value="3">Moderate</option>
-                    <option value="4">Low</option>
-                    <option value="5">Planning</option>
+                    {choiceLists.priorities.map(priority => (
+                      <option key={priority.value} value={priority.value}>
+                        {priority.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
-                {/* Status Filter */}
+                {/* State Filter - Using real ServiceNow choice values */}
                 <div className="filter-group">
-                  <label htmlFor="status-filter">📊 Status</label>
+                  <label htmlFor="state-filter">📊 State</label>
                   <select 
-                    id="status-filter"
-                    value={filters.status}
-                    onChange={(e) => handleFilterChange('status', e.target.value)}
+                    id="state-filter"
+                    value={filters.state}
+                    onChange={(e) => handleFilterChange('state', e.target.value)}
                     className="filter-select"
                   >
-                    <option value="all">All Statuses</option>
-                    <option value="1">New</option>
-                    <option value="2">In Progress</option>
-                    <option value="3">Analysis</option>
-                    <option value="4">Resolved</option>
-                    <option value="5">Closed</option>
+                    <option value="all">All States</option>
+                    {choiceLists.states.map(state => (
+                      <option key={state.value} value={state.value}>
+                        {state.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -434,7 +472,7 @@ export default function ProblemList({ problems, onSelectProblem, onSearch }) {
           filteredProblems.map(problem => {
             const priority = getPriorityBadge(problem.priority);
             const state = getStateBadge(problem.state);
-            const category = display(problem.category) || 'General';
+            const category = display(problem.category) || 'Unknown';
             
             return (
               <div 
@@ -450,7 +488,7 @@ export default function ProblemList({ problems, onSelectProblem, onSearch }) {
                       </span>
                     )}
                     {state && (
-                      <span className={`state-badge ${state.class}`} title={`Status: ${state.text}`}>
+                      <span className={`state-badge ${state.class}`} title={`State: ${state.text}`}>
                         {state.icon} {state.text}
                       </span>
                     )}

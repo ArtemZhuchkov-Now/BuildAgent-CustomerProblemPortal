@@ -129,7 +129,7 @@ export default function App() {
               alignItems: 'center',
               gap: '6px'
             }}>
-              ⚙️ <strong>{stats.byState['2'] || 0}</strong> in progress
+              ⚙️ <strong>{stats.byState['104'] || 0}</strong> in progress
             </div>
             <div style={{ 
               background: 'rgba(255,255,255,0.2)', 
@@ -140,7 +140,7 @@ export default function App() {
               alignItems: 'center',
               gap: '6px'
             }}>
-              ✅ <strong>{stats.byState['4'] || 0}</strong> resolved today
+              ✅ <strong>{stats.byState['106'] || 0}</strong> resolved
             </div>
           </div>
         )}
@@ -275,6 +275,7 @@ export default function App() {
               problems={problems}
               onSelectProblem={handleSelectProblem}
               onSearch={handleSearch}
+              problemService={service}
             />
           </div>
         )}
