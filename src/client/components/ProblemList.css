@@ -235,7 +235,7 @@
 
 .filters-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 16px;
 }
 
@@ -296,6 +296,11 @@
 .results-count {
   color: #1565c0;
   font-weight: 600;
+}
+
+.status-breakdown {
+  color: #1976d2;
+  font-size: 14px;
 }
 
 .active-filters,
@@ -387,6 +392,18 @@
   opacity: 1;
 }
 
+/* Inactive Problem Cards */
+.problem-card.inactive-problem {
+  opacity: 0.7;
+  background: #f8f9fa;
+  border-color: #dee2e6;
+}
+
+.problem-card.inactive-problem:hover {
+  opacity: 1;
+  border-color: #6c757d;
+}
+
 .problem-overlay {
   position: absolute;
   top: 0;
@@ -419,7 +436,7 @@
   gap: 8px;
 }
 
-.priority-badge, .state-badge, .category-badge {
+.priority-badge, .state-badge, .category-badge, .active-badge {
   padding: 6px 12px;
   border-radius: 16px;
   font-size: 12px;
@@ -506,6 +523,19 @@
   border: 1px solid #ef9a9a;
 }
 
+/* Active/Inactive Badge Colors */
+.active-badge.active {
+  background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%);
+  color: #2e7d32;
+  border: 1px solid #81c784;
+}
+
+.active-badge.inactive {
+  background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+  color: #c62828;
+  border: 1px solid #ef5350;
+}
+
 .category-badge {
   background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
   color: #4a5568;
@@ -525,11 +555,19 @@
   color: #0066cc;
 }
 
+.problem-card.inactive-problem .problem-title {
+  color: #6c757d;
+}
+
 .problem-description {
   color: #4a5568;
   line-height: 1.6;
   margin: 0 0 16px 0;
   font-size: 14px;
+}
+
+.problem-card.inactive-problem .problem-description {
+  color: #6c757d;
 }
 
 .problem-meta {
@@ -543,12 +581,21 @@
   gap: 12px;
 }
 
+.problem-card.inactive-problem .problem-meta {
+  color: #adb5bd;
+  border-top-color: #dee2e6;
+}
+
 .problem-number {
   font-weight: 600;
   color: #0066cc;
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.problem-card.inactive-problem .problem-number {
+  color: #6c757d;
 }
 
 .problem-updated {

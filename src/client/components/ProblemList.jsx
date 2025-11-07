@@ -8,6 +8,7 @@ export default function ProblemList({ problems, onSelectProblem, onSearch, probl
     category: 'all',
     priority: 'all',
     state: 'all',
+    active: 'all',
     dateRange: 'all'
   });
   const [showFilters, setShowFilters] = useState(false);
@@ -32,6 +33,8 @@ export default function ProblemList({ problems, onSelectProblem, onSearch, probl
             problemService.getProblemStates()
           ]);
           
+          console.log('Fetched choice lists:', { categories, priorities, states });
+          
           setChoiceLists({
             categories: categories || [],
             priorities: priorities || [],
@@ -48,11 +51,11 @@ export default function ProblemList({ problems, onSelectProblem, onSearch, probl
               { value: 'database', label: 'Database' }
             ],
             priorities: [
-              { value: '1', label: 'Critical' },
-              { value: '2', label: 'High' },
-              { value: '3', label: 'Moderate' },
-              { value: '4', label: 'Low' },
-              { value: '5', label: 'Planning' }
+              { value: '1', label: '1 - Critical' },
+              { value: '2', label: '2 - High' },
+              { value: '3', label: '3 - Moderate' },
+              { value: '4', label: '4 - Low' },
+              { value: '5', label: '5 - Planning' }
             ],
             states: [
               { value: '101', label: 'New' },
@@ -137,6 +140,18 @@ export default function ProblemList({ problems, onSelectProblem, onSearch, probl
           }
         }
 
+        // Active filter - new filter
+        if (filters.active !== 'all') {
+          const problemActive = value(problem.active);
+          const isActive = problemActive === 'true' || problemActive === true;
+          if (filters.active === 'true' && !isActive) {
+            return false;
+          }
+          if (filters.active === 'false' && isActive) {
+            return false;
+          }
+        }
+
         // Date range filter
         if (filters.dateRange !== 'all') {
           const problemDate = new Date(display(problem.sys_updated_on));
@@ -202,6 +217,7 @@ export default function ProblemList({ problems, onSelectProblem, onSearch, probl
       category: 'all',
       priority: 'all',
       state: 'all',
+      active: 'all',
       dateRange: 'all'
     });
     setSearchTerm('');
@@ -246,6 +262,17 @@ export default function ProblemList({ problems, onSelectProblem, onSearch, probl
     }
   };
 
+  const getActiveBadge = (active) => {
+    const activeValue = value(active);
+    const isActive = activeValue === 'true' || activeValue === true;
+    
+    if (isActive) {
+      return { class: 'active-badge active', text: 'Active', icon: '✅' };
+    } else {
+      return { class: 'active-badge inactive', text: 'Inactive', icon: '❌' };
+    }
+  };
+
   const getActiveFiltersCount = () => {
     const filterCount = Object.values(filters).filter(value => value !== 'all').length;
     const searchCount = isSearchMode && searchTerm ? 1 : 0;
@@ -257,6 +284,19 @@ export default function ProblemList({ problems, onSelectProblem, onSearch, probl
     const uniqueProblems = deduplicatedProblems.length;
     return totalProblems - uniqueProblems;
   };
+
+  // Get stats for the current filtered problems
+  const getFilteredStats = () => {
+    const active = filteredProblems.filter(p => {
+      const activeValue = value(p.active);
+      return activeValue === 'true' || activeValue === true;
+    }).length;
+    const inactive = filteredProblems.length - active;
+    
+    return { active, inactive, total: filteredProblems.length };
+  };
+
+  const stats = getFilteredStats();
 
   return (
     <div className="problem-list">
@@ -396,6 +436,21 @@ export default function ProblemList({ problems, onSelectProblem, onSearch, probl
                   </select>
                 </div>
 
+                {/* Active Filter - New filter */}
+                <div className="filter-group">
+                  <label htmlFor="active-filter">🔄 Status</label>
+                  <select 
+                    id="active-filter"
+                    value={filters.active}
+                    onChange={(e) => handleFilterChange('active', e.target.value)}
+                    className="filter-select"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="true">Active Only</option>
+                    <option value="false">Inactive Only</option>
+                  </select>
+                </div>
+
                 {/* Date Range Filter */}
                 <div className="filter-group">
                   <label htmlFor="date-filter">📅 Updated</label>
@@ -429,6 +484,9 @@ export default function ProblemList({ problems, onSelectProblem, onSearch, probl
           <span className="results-count">
             📋 Showing <strong>{filteredProblems.length}</strong> of <strong>{problems.length}</strong> problems
           </span>
+          <span className="status-breakdown">
+            • <strong>{stats.active}</strong> active, <strong>{stats.inactive}</strong> inactive
+          </span>
           {hideDuplicates && getDuplicateCount() > 0 && (
             <span className="duplicate-info">
               • {getDuplicateCount()} duplicate{getDuplicateCount() > 1 ? 's' : ''} hidden
@@ -455,7 +513,7 @@ export default function ProblemList({ problems, onSelectProblem, onSearch, probl
               <>
                 <div className="no-problems-icon">🎉</div>
                 <h3>No Known Problems!</h3>
-                <p>Great news! There are no active problems to display.</p>
+                <p>Great news! There are no problems to display.</p>
               </>
             ) : (
               <>
@@ -472,16 +530,22 @@ export default function ProblemList({ problems, onSelectProblem, onSearch, probl
           filteredProblems.map(problem => {
             const priority = getPriorityBadge(problem.priority);
             const state = getStateBadge(problem.state);
+            const activeStatus = getActiveBadge(problem.active);
             const category = display(problem.category) || 'Unknown';
             
             return (
               <div 
                 key={value(problem.sys_id)} 
-                className="problem-card"
+                className={`problem-card ${!activeStatus || activeStatus.text === 'Inactive' ? 'inactive-problem' : ''}`}
                 onClick={() => onSelectProblem(problem)}
               >
                 <div className="problem-header">
                   <div className="badges-container">
+                    {activeStatus && (
+                      <span className={`active-badge ${activeStatus.class}`} title={`Status: ${activeStatus.text}`}>
+                        {activeStatus.icon} {activeStatus.text}
+                      </span>
+                    )}
                     {priority && (
                       <span className={`priority-badge ${priority.class}`} title={`Priority: ${priority.text}`}>
                         {priority.icon} {priority.text}

@@ -29,12 +29,22 @@ export class ProblemService {
         label: choice.label
       }));
       
+      // If no choices found in sys_choice, use fallback
+      if (choices.length === 0) {
+        console.log(`No choices found in sys_choice for ${table}.${field}, using fallback`);
+        const fallbackChoices = this._getFallbackChoices(table, field);
+        this._choiceCache[cacheKey] = fallbackChoices;
+        return fallbackChoices;
+      }
+      
       this._choiceCache[cacheKey] = choices;
       return choices;
     } catch (error) {
       console.error(`Error fetching choices for ${table}.${field}:`, error);
       // Return fallback choices based on actual schema
-      return this._getFallbackChoices(table, field);
+      const fallbackChoices = this._getFallbackChoices(table, field);
+      this._choiceCache[cacheKey] = fallbackChoices;
+      return fallbackChoices;
     }
   }
 
@@ -49,12 +59,13 @@ export class ProblemService {
             { value: 'database', label: 'Database' }
           ];
         case 'priority':
+          // Priority field uses integer values 1-5 but doesn't store choices in sys_choice
           return [
-            { value: '1', label: 'Critical' },
-            { value: '2', label: 'High' },
-            { value: '3', label: 'Moderate' },
-            { value: '4', label: 'Low' },
-            { value: '5', label: 'Planning' }
+            { value: '1', label: '1 - Critical' },
+            { value: '2', label: '2 - High' },
+            { value: '3', label: '3 - Moderate' },
+            { value: '4', label: '4 - Low' },
+            { value: '5', label: '5 - Planning' }
           ];
         case 'state':
           return [
@@ -72,22 +83,27 @@ export class ProblemService {
 
   async getKnownProblems(filters = {}) {
     try {
-      // Build query based on filters
-      let query = 'active=true'; // Only get active problems
+      // Build query based on filters - Include both active and inactive problems
+      let query = '';
       
       // Add category filter
       if (filters.category && filters.category !== 'all') {
-        query += `^category=${filters.category}`;
+        query += (query ? '^' : '') + `category=${filters.category}`;
       }
       
       // Add priority filter
       if (filters.priority && filters.priority !== 'all') {
-        query += `^priority=${filters.priority}`;
+        query += (query ? '^' : '') + `priority=${filters.priority}`;
       }
       
       // Add state filter
       if (filters.state && filters.state !== 'all') {
-        query += `^state=${filters.state}`;
+        query += (query ? '^' : '') + `state=${filters.state}`;
+      }
+      
+      // Add active filter option
+      if (filters.activeOnly !== undefined) {
+        query += (query ? '^' : '') + `active=${filters.activeOnly}`;
       }
       
       // Add date range filter
@@ -109,14 +125,14 @@ export class ProblemService {
         
         if (startDate) {
           const dateStr = startDate.toISOString().split('T')[0];
-          query += `^sys_updated_on>=${dateStr}`;
+          query += (query ? '^' : '') + `sys_updated_on>=${dateStr}`;
         }
       }
       
       // Always order by most recent first
-      query += '^ORDERBYDESCsys_updated_on';
+      query += (query ? '^' : '') + 'ORDERBYDESCsys_updated_on';
       
-      const response = await fetch(`/api/now/table/problem?sysparm_display_value=all&sysparm_query=${query}&sysparm_limit=100&sysparm_fields=sys_id,number,short_description,description,priority,state,category,sys_updated_on,sys_created_on,assigned_to,impact,urgency,knowledge`, {
+      const response = await fetch(`/api/now/table/problem?sysparm_display_value=all&sysparm_query=${query}&sysparm_limit=200&sysparm_fields=sys_id,number,short_description,description,priority,state,category,sys_updated_on,sys_created_on,assigned_to,impact,urgency,knowledge,active`, {
         headers: this.baseHeaders
       });
       
@@ -135,14 +151,16 @@ export class ProblemService {
     const categories = ['software', 'hardware', 'network', 'database'];
     const priorities = ['1', '2', '3', '4', '5'];
     const states = ['101', '102', '103', '104', '106', '107'];
+    const activeStates = [true, true, true, false, false, true, true, false, true, true]; // Mix of active/inactive
     
     const problems = [];
     
-    for (let i = 1; i <= 25; i++) {
+    for (let i = 1; i <= 50; i++) { // Increased to 50 for more test data
       const randomCategory = categories[Math.floor(Math.random() * categories.length)];
       const randomPriority = priorities[Math.floor(Math.random() * priorities.length)];
       const randomState = states[Math.floor(Math.random() * states.length)];
-      const randomDaysAgo = Math.floor(Math.random() * 30);
+      const randomActive = activeStates[Math.floor(Math.random() * activeStates.length)];
+      const randomDaysAgo = Math.floor(Math.random() * 90); // Extended to 90 days
       const updatedDate = new Date();
       updatedDate.setDate(updatedDate.getDate() - randomDaysAgo);
       
@@ -160,6 +178,7 @@ export class ProblemService {
         priority: { display_value: randomPriority, value: randomPriority },
         state: { display_value: randomState, value: randomState },
         category: { display_value: randomCategory, value: randomCategory },
+        active: { display_value: randomActive.toString(), value: randomActive.toString() },
         sys_updated_on: { display_value: updatedDate.toISOString(), value: updatedDate.toISOString() },
         sys_created_on: { display_value: updatedDate.toISOString(), value: updatedDate.toISOString() },
         impact: { display_value: Math.floor(Math.random() * 3) + 1, value: Math.floor(Math.random() * 3) + 1 },
@@ -191,7 +210,17 @@ export class ProblemService {
       'Backup Process Failures',
       'User Interface Rendering Issues',
       'Third-party Integration Outage',
-      'Monitoring Alert Storm'
+      'Monitoring Alert Storm',
+      'Session Timeout Issues',
+      'Database Lock Conflicts',
+      'Server Disk Space Full',
+      'DNS Resolution Problems',
+      'Certificate Chain Issues',
+      'Application Memory Overflow',
+      'Integration Service Down',
+      'Cache Server Unreachable',
+      'Load Testing Failures',
+      'Security Scan Failures'
     ];
     
     return titles[Math.floor(Math.random() * titles.length)];
@@ -208,7 +237,12 @@ export class ProblemService {
       'Critical business services are becoming unavailable without warning, affecting customer-facing operations and internal workflows.',
       'Data synchronization between systems is failing, causing discrepancies in reporting and potential data integrity issues.',
       'Production servers are showing signs of memory leaks, leading to degraded performance and eventual system crashes.',
-      'SSL certificates are approaching expiration dates, which could cause service interruptions if not renewed promptly.'
+      'SSL certificates are approaching expiration dates, which could cause service interruptions if not renewed promptly.',
+      'Email services are experiencing delays in message delivery, with some emails taking hours to reach recipients.',
+      'File upload functionality is failing for files larger than 5MB, preventing users from completing their work.',
+      'API endpoints are returning rate limiting errors even for normal usage patterns, blocking integrations.',
+      'Application cache is not invalidating properly, causing users to see stale data and outdated information.',
+      'Load balancer is not distributing traffic evenly, causing some servers to be overloaded while others remain idle.'
     ];
     
     return descriptions[Math.floor(Math.random() * descriptions.length)];
@@ -320,9 +354,6 @@ export class ProblemService {
       // Build search query
       let query = `short_descriptionLIKE${searchTerm}^ORdescriptionLIKE${searchTerm}^ORnumberLIKE${searchTerm}`;
       
-      // Add base filter (active problems)
-      query += '^active=true';
-      
       // Add additional filters with correct values
       if (filters.category && filters.category !== 'all') {
         query += `^category=${filters.category}`;
@@ -336,10 +367,15 @@ export class ProblemService {
         query += `^state=${filters.state}`;
       }
       
+      // Include both active and inactive by default in search
+      if (filters.activeOnly !== undefined) {
+        query += `^active=${filters.activeOnly}`;
+      }
+      
       // Order by relevance (updated recently first)
       query += '^ORDERBYDESCsys_updated_on';
       
-      const response = await fetch(`/api/now/table/problem?sysparm_display_value=all&sysparm_query=${query}&sysparm_limit=50&sysparm_fields=sys_id,number,short_description,description,priority,state,category,sys_updated_on,sys_created_on,assigned_to,impact,urgency`, {
+      const response = await fetch(`/api/now/table/problem?sysparm_display_value=all&sysparm_query=${query}&sysparm_limit=100&sysparm_fields=sys_id,number,short_description,description,priority,state,category,sys_updated_on,sys_created_on,assigned_to,impact,urgency,active`, {
         headers: this.baseHeaders
       });
       
@@ -418,7 +454,7 @@ export class ProblemService {
   async getNotificationSummary() {
     // For POC, return mock notification data
     return {
-      totalProblems: Math.floor(Math.random() * 50) + 10,
+      totalProblems: Math.floor(Math.random() * 50) + 30,
       resolvedToday: Math.floor(Math.random() * 5) + 1,
       newThisWeek: Math.floor(Math.random() * 8) + 2,
       communityContributions: Math.floor(Math.random() * 15) + 5
@@ -441,8 +477,8 @@ export class ProblemService {
 
   async getProblemStats() {
     try {
-      // Get statistics for dashboard with correct field filtering
-      const response = await fetch('/api/now/table/problem?sysparm_query=active=true&sysparm_fields=state,priority,category&sysparm_display_value=true&sysparm_exclude_reference_link=true', {
+      // Get statistics for dashboard - include both active and inactive
+      const response = await fetch('/api/now/table/problem?sysparm_fields=state,priority,category,active&sysparm_display_value=true&sysparm_exclude_reference_link=true&sysparm_limit=500', {
         headers: this.baseHeaders
       });
       
@@ -452,12 +488,22 @@ export class ProblemService {
       // Calculate statistics
       const stats = {
         total: data.result.length,
+        active: 0,
+        inactive: 0,
         byPriority: {},
         byState: {},
         byCategory: {}
       };
       
       data.result.forEach(problem => {
+        // Count active/inactive
+        const isActive = problem.active === 'true' || problem.active === true;
+        if (isActive) {
+          stats.active++;
+        } else {
+          stats.inactive++;
+        }
+        
         // Count by priority
         const priority = problem.priority || 'Unknown';
         stats.byPriority[priority] = (stats.byPriority[priority] || 0) + 1;
@@ -476,10 +522,12 @@ export class ProblemService {
       console.error('Error fetching stats:', error);
       // Return mock stats with correct categories
       return {
-        total: 25,
-        byPriority: { '1': 3, '2': 7, '3': 10, '4': 4, '5': 1 },
-        byState: { '101': 5, '102': 8, '103': 7, '104': 3, '106': 2 },
-        byCategory: { 'software': 8, 'hardware': 5, 'network': 7, 'database': 5 }
+        total: 50,
+        active: 35,
+        inactive: 15,
+        byPriority: { '1': 8, '2': 12, '3': 15, '4': 10, '5': 5 },
+        byState: { '101': 8, '102': 12, '103': 10, '104': 8, '106': 7, '107': 5 },
+        byCategory: { 'software': 15, 'hardware': 12, 'network': 13, 'database': 10 }
       };
     }
   }
