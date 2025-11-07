@@ -1,0 +1,6 @@
+{
+  "scope": "x_snc_selfservic_1",
+  "scopeId": "c9ef938d3bc93610cdf29c0f23e45a43",
+  "name": "Selfservic 1",
+  "tsconfigPath": "./src/server/tsconfig.json"
+}

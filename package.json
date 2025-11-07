@@ -1,0 +1,22 @@
+{
+    "name": "x-snc-selfservic-1",
+    "version": "1.0.0",
+    "description": "[BUILD AGENT GENERATED]:  Customer-facing portal for known problems, workarounds, proactive notifications, and community-driven solution sharing with voting system",
+    "license": "UNLICENSED",
+    "scripts": {
+        "build": "now-sdk build",
+        "deploy": "now-sdk install",
+        "transform": "now-sdk transform",
+        "types": "now-sdk dependencies"
+    },
+    "dependencies": {
+        "react": "18.2.0",
+        "react-dom": "18.2.0"
+    },
+    "devDependencies": {
+        "@servicenow/sdk": "4.0.2",
+        "@servicenow/glide": "26.0.1",
+        "eslint": "8.50.0",
+        "@servicenow/eslint-plugin-sdk-app-plugin": "4.0.2"
+    }
+}
