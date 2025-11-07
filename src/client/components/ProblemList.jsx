@@ -460,6 +460,9 @@ export default function ProblemList({ problems, onSelectProblem, onSearch, probl
           <span className="results-count">
             📋 Showing <strong>{filteredProblems.length}</strong> of <strong>{problems.length}</strong> problems
           </span>
+          <span className="data-info">
+            🤖 (Top 200 from database shown for performance)
+          </span>
           <span className="status-breakdown">
             • <strong>{stats.active}</strong> active, <strong>{stats.inactive}</strong> inactive
           </span>

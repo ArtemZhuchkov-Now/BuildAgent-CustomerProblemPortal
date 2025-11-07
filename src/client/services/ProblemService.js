@@ -109,12 +109,16 @@ export class ProblemService {
       // Always order by most recent first
       query += (query ? '^' : '') + 'ORDERBYDESCsys_updated_on';
       
+      // Query ALL problems but limit display to top 200 for performance
       const response = await fetch(`/api/now/table/problem?sysparm_display_value=all&sysparm_query=${query}&sysparm_limit=200&sysparm_fields=sys_id,number,short_description,description,priority,state,category,sys_updated_on,sys_created_on,assigned_to,impact,urgency,knowledge,active`, {
         headers: this.baseHeaders
       });
       
       if (!response.ok) throw new Error('Failed to fetch problems');
       const data = await response.json();
+      
+      console.log(`Fetched ${data.result.length} problems for display (showing top 200 from filtered results)`);
+      
       return data.result || [];
     } catch (error) {
       console.error('Error fetching problems:', error);
@@ -329,7 +333,7 @@ export class ProblemService {
 
   async searchProblems(searchTerm, filters = {}) {
     try {
-      // Build search query
+      // Build search query - search across ALL problems, not just first 200
       let query = `short_descriptionLIKE${searchTerm}^ORdescriptionLIKE${searchTerm}^ORnumberLIKE${searchTerm}`;
       
       // Add additional filters with correct values
@@ -353,6 +357,7 @@ export class ProblemService {
       // Order by relevance (updated recently first)
       query += '^ORDERBYDESCsys_updated_on';
       
+      // For search, limit to 100 results for better performance
       const response = await fetch(`/api/now/table/problem?sysparm_display_value=all&sysparm_query=${query}&sysparm_limit=100&sysparm_fields=sys_id,number,short_description,description,priority,state,category,sys_updated_on,sys_created_on,assigned_to,impact,urgency,active`, {
         headers: this.baseHeaders
       });
@@ -455,13 +460,15 @@ export class ProblemService {
 
   async getProblemStats() {
     try {
-      // Get statistics for dashboard - include both active and inactive
-      const response = await fetch('/api/now/table/problem?sysparm_fields=state,priority,category,active&sysparm_display_value=true&sysparm_exclude_reference_link=true&sysparm_limit=500', {
+      // Get statistics for dashboard - Track ALL problem records (no limit)
+      const response = await fetch('/api/now/table/problem?sysparm_fields=state,priority,category,active&sysparm_display_value=true&sysparm_exclude_reference_link=true', {
         headers: this.baseHeaders
       });
       
       if (!response.ok) throw new Error('Failed to fetch stats');
       const data = await response.json();
+      
+      console.log(`Stats: Found ${data.result.length} total problems in the database`);
       
       // Calculate statistics
       const stats = {
